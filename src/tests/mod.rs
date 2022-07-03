@@ -1,3 +1,4 @@
+pub mod log;
 use crate::encoder;
 use colored::*;
 use png;
@@ -91,11 +92,19 @@ impl Test {
     }
 
     pub fn size_diff(&self) -> f64 {
-        (self.size as f64 - self.ref_size as f64) / self.ref_size as f64 * 100.0
+        if self.ref_size != 0 {
+            (self.size as f64 - self.ref_size as f64) / self.ref_size as f64 * 100.0
+        } else {
+            100.0
+        }
     }
 
     pub fn time_diff(&self) -> f64 {
-        self.ref_time as f64 / self.time as f64
+        if self.time != 0 {
+            self.ref_time as f64 / self.time as f64
+        } else {
+            50.0
+        }
     }
 }
 
@@ -116,15 +125,22 @@ impl std::fmt::Display for Test {
     }
 }
 
-pub struct TestImages(Vec<TestImage>);
+pub struct TestImages {
+    tests: Vec<TestImage>,
+    pub agregator: log::Agregator,
+}
 
 impl TestImages {
     pub fn new() -> Self {
-        Self(Vec::new())
+        Self {
+            tests: Vec::new(),
+            agregator: log::Agregator::new(),
+        }
     }
 
     pub fn add(&mut self, test: TestImage) {
-        self.0.push(test);
+        self.agregator.add(&test.logger);
+        self.tests.push(test);
     }
 }
 
@@ -141,7 +157,7 @@ impl std::fmt::Display for TestImages {
         let mut count = 0;
         let mut sizes: HashMap<Algo, f64> = HashMap::new();
         let mut times: HashMap<Algo, f64> = HashMap::new();
-        for tests in self.0.iter() {
+        for tests in self.tests.iter() {
             count += 1;
             for test in tests.tests.iter() {
                 *sizes.entry(test.algo).or_insert(0.0) += test.size_diff();
@@ -163,7 +179,8 @@ impl std::fmt::Display for TestImages {
             })
             .collect::<Vec<_>>()
             .join("\n");
-        write!(f, "\n{hsep}{title}{hsep}{}\n{hsep}", tests)
+        let logger = &self.agregator;
+        write!(f, "\n{hsep}{title}{hsep}{}\n{hsep}\n{logger}", tests)
     }
 }
 
@@ -174,6 +191,7 @@ pub struct TestImage {
     width: usize,
     is_alpha: bool,
     tests: Vec<Test>,
+    logger: log::Logger,
 }
 
 impl TestImage {
@@ -192,11 +210,26 @@ impl TestImage {
             bytes,
             path,
             tests: Vec::new(),
+            logger: log::Logger::new(),
         };
         test.test_png();
-        test.test_boi();
+        test.test_boi_with_log();
         test.test_qoi();
         test
+    }
+
+    pub fn test_boi_with_log(&mut self) {
+        let mut test = Test::start_with_ref(Algo::Boi, &self.tests[0]);
+        let (logger, encoded) = if !self.is_alpha {
+            encoder::Encoder::<3>::encode_with_logger(&self.bytes, self.width, self.height)
+        } else {
+            encoder::Encoder::<4>::encode_with_logger(&self.bytes, self.width, self.height)
+        };
+        let len = encoded.len();
+        let _ = std::fs::write("./img/out.boi", encoded);
+        test.stop(len);
+        self.tests.push(test);
+        self.logger = logger;
     }
 
     pub fn test_boi(&mut self) {

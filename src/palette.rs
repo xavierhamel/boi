@@ -28,7 +28,9 @@ impl<const CHANNELS: usize> From<&[u8]> for ImagePalette<CHANNELS> {
         for chunk in raw.chunks_exact(CHANNELS * 2).step_by(step) {
             let pixel =
                 img::Pixel::<CHANNELS>::compute_forward(&chunk[0..CHANNELS], &chunk[CHANNELS..]);
-            image_palette.increment_color(pixel);
+            if !blocks::Gray::is_gray(&pixel) {
+                image_palette.increment_color(pixel);
+            }
         }
         image_palette
     }

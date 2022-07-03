@@ -44,13 +44,21 @@ mod test {
     #[test]
     fn test_encoder() {
         let mut tests = tests::TestImages::new();
-        let paths = std::fs::read_dir("./img/wallpaper").unwrap();
-        for path in paths {
-            let path = path.unwrap().path().display().to_string();
-            let test = tests::TestImage::test(path);
-            println!("{}", test);
-            tests.add(test);
+        for dir in [
+            "./img/wallpaper",
+            "./img/kodak",
+            "./img/screenshots",
+            "./img/textures",
+        ] {
+            let paths = std::fs::read_dir(dir).unwrap();
+            for path in paths {
+                let path = path.unwrap().path().display().to_string();
+                let test = tests::TestImage::test(path);
+                println!("{}", test);
+                tests.add(test);
+            }
         }
+        tests.agregator.average();
         println!("{}", tests);
         assert!(true);
     }
