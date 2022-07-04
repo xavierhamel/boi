@@ -1,13 +1,32 @@
 use crate::img;
 use crate::{U8_BITS, USIZE_BITS};
+use macros::BoiTyp;
 
-// 00
-// 01
-// 100
-// 101
-// 110
-// 1110
-// 1111
+#[derive(BoiTyp)]
+pub enum Typ<const CHANNELS: usize> {
+    #[boi(code = 0b110, code_len = 3, size = 4, uses_channels = true)]
+    Short,
+
+    //#[boi(code = 0b100, code_len = 3, size = 6, uses_channels = true)]
+    #[boi(code = 0b1110, code_len = 4, size = 6, uses_channels = true)]
+    Medium,
+
+    #[boi(code = 0b1111, code_len = 4, size = 9, uses_channels = true)]
+    //#[boi(code = 0b101, code_len = 3, size = 9, uses_channels = true)]
+    Long,
+
+    #[boi(code = 0b100, code_len = 3, size = 6)]
+    Repeating,
+
+    #[boi(code = 0b01, code_len = 2, size = 4)]
+    Color,
+
+    #[boi(code = 0b101, code_len = 3, size = 2)]
+    Gray,
+
+    #[boi(code = 0b00, code_len = 2, size = 8)]
+    Offset,
+}
 
 #[derive(Debug)]
 pub struct Block {
@@ -83,10 +102,12 @@ impl Block {
 pub struct Repeating;
 
 impl Repeating {
-    const BITS_COUNT: usize = 6;
+    const BITS_COUNT: usize = Typ::<0>::REPEATING_SIZE;
+    const CODE_LEN: usize = Typ::<0>::REPEATING_CODE_LEN;
+    const CODE: usize = Typ::<0>::REPEATING_CODE;
     pub const MAX: usize = 2usize.pow(Self::BITS_COUNT as u32);
-    const CODE_LEN: usize = 4;
-    const CODE: usize = 0b1111;
+
+    // bits : 8
 
     #[inline]
     pub fn encode(value: usize) -> Block {
@@ -97,9 +118,10 @@ impl Repeating {
 pub struct Gray<const CHANNELS: usize>;
 
 impl<const CHANNELS: usize> Gray<CHANNELS> {
-    const BITS_COUNT: usize = 4;
-    const CODE: usize = 0b110;
-    const CODE_LEN: usize = 3;
+    const BITS_COUNT: usize = Typ::<0>::GRAY_SIZE;
+    const CODE_LEN: usize = Typ::<0>::GRAY_CODE_LEN;
+    const CODE: usize = Typ::<0>::GRAY_CODE;
+    // bits : 4
 
     const MIN: i16 = -2i16.pow(Self::BITS_COUNT as u32) / 2;
     const MAX: i16 = (2i16.pow(Self::BITS_COUNT as u32) / 2) - 1;
@@ -131,11 +153,13 @@ impl<const CHANNELS: usize> Gray<CHANNELS> {
 pub struct Offset;
 
 impl Offset {
-    const BITS_COUNT: usize = 8;
+    const BITS_COUNT: usize = Typ::<0>::OFFSET_SIZE;
+    const CODE_LEN: usize = Typ::<0>::OFFSET_CODE_LEN;
+    const CODE: usize = Typ::<0>::OFFSET_CODE;
+
+    // const BITS_COUNT: usize = 8;
     pub const MASK: usize = 0b111111;
     pub const MAX: usize = 2usize.pow(Self::BITS_COUNT as u32);
-    const CODE_LEN: usize = 2;
-    const CODE: usize = 0b01;
 
     #[inline]
     pub fn encode(value: usize) -> Block {
@@ -146,15 +170,17 @@ impl Offset {
 pub struct Pixel<const CHANNELS: usize>;
 
 impl<const CHANNELS: usize> Pixel<CHANNELS> {
-    const CODE_LEN: usize = 3;
+    const SHORT_BITS: usize = Typ::<CHANNELS>::SHORT_SIZE;
+    const SHORT_CODE_LEN: usize = Typ::<CHANNELS>::SHORT_CODE_LEN;
+    const SHORT_CODE: usize = Typ::<CHANNELS>::SHORT_CODE;
 
-    const SHORT_CODE: usize = 0b00;
-    const MEDIUM_CODE: usize = 0b101;
-    const LONG_CODE: usize = 0b1110;
+    const MEDIUM_BITS: usize = Typ::<CHANNELS>::MEDIUM_SIZE;
+    const MEDIUM_CODE_LEN: usize = Typ::<CHANNELS>::MEDIUM_CODE_LEN;
+    const MEDIUM_CODE: usize = Typ::<CHANNELS>::MEDIUM_CODE;
 
-    pub const SHORT_BITS: usize = 4;
-    pub const MEDIUM_BITS: usize = 6;
-    pub const LONG_BITS: usize = 9;
+    const LONG_BITS: usize = Typ::<CHANNELS>::LONG_SIZE;
+    const LONG_CODE_LEN: usize = Typ::<CHANNELS>::LONG_CODE_LEN;
+    const LONG_CODE: usize = Typ::<CHANNELS>::LONG_CODE;
 
     const SHORT_MIN: i16 = -2i16.pow(Self::SHORT_BITS as u32) / 2;
     const SHORT_MAX: i16 = (2i16.pow(Self::SHORT_BITS as u32) / 2) - 1;
@@ -167,11 +193,11 @@ impl<const CHANNELS: usize> Pixel<CHANNELS> {
         let max = *pixel.0.iter().max().unwrap();
         let channel = 3;
         let (channel_size, code, code_len) = if min >= Self::SHORT_MIN && max <= Self::SHORT_MAX {
-            (Self::SHORT_BITS, Self::SHORT_CODE, 2)
+            (Self::SHORT_BITS, Self::SHORT_CODE, Self::SHORT_CODE_LEN)
         } else if min >= Self::MEDIUM_MIN && max <= Self::MEDIUM_MAX {
-            (Self::MEDIUM_BITS, Self::MEDIUM_CODE, 3)
+            (Self::MEDIUM_BITS, Self::MEDIUM_CODE, Self::MEDIUM_CODE_LEN)
         } else {
-            (Self::LONG_BITS, Self::LONG_CODE, 4)
+            (Self::LONG_BITS, Self::LONG_CODE, Self::LONG_CODE_LEN)
         };
         let value = Self::encode_channels(pixel, channel_size);
         Block::new_with_code(channel_size * channel, value, code_len, code)
@@ -190,9 +216,9 @@ impl<const CHANNELS: usize> Pixel<CHANNELS> {
     #[inline]
     pub fn decode(value: usize, code: usize) -> img::Pixel<CHANNELS> {
         let channel_size = match code {
-            0b00 => Self::SHORT_BITS,
-            0b101 => Self::MEDIUM_BITS,
-            0b1110 => Self::LONG_BITS,
+            Self::SHORT_CODE => Self::SHORT_BITS,
+            Self::MEDIUM_CODE => Self::MEDIUM_BITS,
+            Self::LONG_CODE => Self::LONG_BITS,
             _ => panic!("Code: {}", code),
         };
         let mut pixel = [0; CHANNELS];
@@ -223,10 +249,11 @@ impl<const CHANNELS: usize> Pixel<CHANNELS> {
 pub struct Color;
 
 impl Color {
-    const BITS_COUNT: usize = 4;
+    const BITS_COUNT: usize = Typ::<0>::COLOR_SIZE;
+    const CODE_LEN: usize = Typ::<0>::COLOR_CODE_LEN;
+    const CODE: usize = Typ::<0>::COLOR_CODE;
+
     pub const MAX: usize = 2usize.pow(Self::BITS_COUNT as u32);
-    const CODE_LEN: usize = 3;
-    const CODE: usize = 0b111;
 
     #[inline]
     pub fn encode(value: usize) -> Block {

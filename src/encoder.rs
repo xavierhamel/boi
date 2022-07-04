@@ -7,7 +7,7 @@ pub struct Encoder<const CHANNELS: usize>;
 
 impl<const CHANNELS: usize> Encoder<CHANNELS> {
     pub fn encode_with_logger(raw: &[u8], width: usize, height: usize) -> (log::Logger, Vec<u8>) {
-        let image = img::Image::new(raw, width, height);
+        let image = img::Image::<CHANNELS>::new(raw, width, height);
         let header = img::Header::new(width, height, &image.palette);
         let mut offsets = [img::Pixel::zeros(); blocks::Offset::MAX];
         let mut repeating = 0;
@@ -45,11 +45,12 @@ impl<const CHANNELS: usize> Encoder<CHANNELS> {
                     logger.offset += 1;
                 } else {
                     let block = blocks::Pixel::encode(&pixel);
-                    match block.bit_count {
-                        14 | 18 => logger.short += 1,
-                        21 | 27 => logger.medium += 1,
-                        31 | 40 => logger.long += 1,
-                        _ => {}
+                    if block.bit_count == blocks::Typ::<CHANNELS>::Short.size() {
+                        logger.short += 1;
+                    } else if block.bit_count == blocks::Typ::<CHANNELS>::Medium.size() {
+                        logger.medium += 1;
+                    } else if block.bit_count == blocks::Typ::<CHANNELS>::Long.size() {
+                        logger.long += 1;
                     }
                     buffer.push(block);
                 }
