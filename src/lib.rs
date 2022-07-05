@@ -5,6 +5,7 @@ mod decoder;
 mod encoder;
 mod img;
 mod palette;
+mod squares;
 mod tests;
 
 pub const U8_BITS: usize = u8::BITS as usize;
@@ -31,7 +32,7 @@ mod test {
         let ref mut w = std::io::BufWriter::new(file);
 
         let mut encoder = png::Encoder::new(w, width, height);
-        match false {
+        match true {
             true => encoder.set_color(png::ColorType::Rgba),
             false => encoder.set_color(png::ColorType::Rgb),
         }
@@ -61,6 +62,19 @@ mod test {
         tests.agregator.average();
         println!("{}", tests);
         assert!(true);
+    }
+
+    //#[test]
+    fn test_encoder_single() {
+        let path = "./img/screenshots/en.wikipedia.org.png".to_string();
+        //let path = "./img/wallpaper/1492858.png".to_string();
+        let (bytes, width, height, is_alpha) = open_image(path);
+        let (_, encoded) = if !is_alpha {
+            encoder::Encoder::<3>::encode_with_logger(&bytes, width, height)
+        } else {
+            encoder::Encoder::<4>::encode_with_logger(&bytes, width, height)
+        };
+        save_image("./img/out.png", width as u32, height as u32, &encoded);
     }
 
     //#[test]
